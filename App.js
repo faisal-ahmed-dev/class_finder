@@ -1,17 +1,13 @@
-import { StyleSheet, Text, View,ScrollView } from 'react-native'
 import React from 'react'
 import { NavigationContainer } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Home from './app/screen/Home';
 import Profile from './app/screen/Profile';
 import Routine from './app/screen/Routine';
-import {widthPercentageToDP as wp, heightPercentageToDP as hp} from 'react-native-responsive-screen';
 
-import { Feather } from '@expo/vector-icons';
 import { FontAwesome } from '@expo/vector-icons';
 import { Ionicons } from '@expo/vector-icons';
-import { AntDesign } from '@expo/vector-icons';
-import { FontAwesome5 } from '@expo/vector-icons';
+
 
 
 const Tab=createBottomTabNavigator();

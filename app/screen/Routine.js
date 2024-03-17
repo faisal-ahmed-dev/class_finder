@@ -1,16 +1,15 @@
-import {Platform, StyleSheet, Text, View, SafeAreaView,TouchableWithoutFeedback,Dimensions,TouchableOpacity,TextInput,Button,ScrollView ,FlatList } from 'react-native'
+import { StyleSheet, Text, View, SafeAreaView,TouchableWithoutFeedback,Dimensions,TouchableOpacity,TextInput,Button,ScrollView ,FlatList } from 'react-native'
 import React from 'react'
 import {widthPercentageToDP as wp, heightPercentageToDP as hp} from 'react-native-responsive-screen';
 import  { useState, useRef,useEffect } from 'react';
 import moment from 'moment';
-import Swiper from 'react-native-swiper';
-const { width } = Dimensions.get('window');
 import Modal from "react-native-modal";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
-import { StatusBar } from 'expo-status-bar';
 import Calendar from '../components/horizontal_date/Calender';
 import { AntDesign } from '@expo/vector-icons';
-import ButtonToggleGroup from 'react-native-button-toggle-group';
+
+
+const { width } = Dimensions.get('window');
 
 
 import { FontAwesome, MaterialIcons } from '@expo/vector-icons';
@@ -27,6 +26,7 @@ const Routine = () => {
     const [visible,setVisible]=useState(false);
     const [open, setOpen] = useState(false)
     const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
+    const [edit, setEdit] = useState(false)
 
     const [buttonToggle, setButtonToggle] = React.useState('Light'); // Button toggle
 
@@ -131,7 +131,7 @@ const Routine = () => {
                 });
             
                     db.transaction(tx => {
-                        tx.executeSql(`SELECT * FROM class where selectedDate='${selectedDate}'`, null,
+                        tx.executeSql(`SELECT * FROM class where selectedDate='${selectedDate}' ORDER BY selectedStartTime`, null,
                             (txObj, resultSet) => setCourseItems(resultSet.rows._array),
                             (txObj, error) => console.log(error)
                         );
@@ -146,9 +146,12 @@ const Routine = () => {
             const [building, setBuilding]=useState(null);
             const [room, setRoom]=useState(null);
             const [courseItems,setCourseItems]=useState([]);
+            const [courseId,setCourseId]=useState(null);
+
 
             const handleRoutineAdd= ()=>{
             
+                if(edit===false){
                 db.transaction(tx => {
                   tx.executeSql(`INSERT INTO class (courseCode, faculty, building, room, selectedStartTime, selectedEndTime,selectedDate)
                   VALUES ('${courseCode}', '${faculty}', '${building}', '${room}', '${selectedStartTime}', '${selectedEndTime}','${selectedDate}')
@@ -157,8 +160,23 @@ const Routine = () => {
                     (txObj, error) => console.log(error)
                   );
                 });
-
+                }
+                else{
+                    
+                    db.transaction(tx => {
+                        tx.executeSql(`UPDATE class SET courseCode='${courseCode}', faculty='${faculty}',building='${building}',room='${room}', selectedStartTime='${selectedStartTime}', selectedEndTime='${selectedEndTime}' where id=${courseId}`, null,
+                        (txObj, resultSet) => {console.log("success update", resultSet)},
+                        (txObj, error) => console.log(error)
+                        );
+                      });
+                      
+                     
+                      
+                      setEdit(false)
+                }
                   handleRoutineRefresh();
+
+                  setVisible(false);
             
             }
 
@@ -173,6 +191,45 @@ const Routine = () => {
                     );
                   });
             }
+
+
+            const handleRoutineEdit=(id)=>{
+
+                /*
+                db.transaction(tx => {
+                    tx.executeSql(`SELECT * FROM class where selectedDate='${selectedDate}' and id=${id}`, null,
+                        (txObj, resultSet) => {
+                            setCourseId(resultSet.rows._array[0].id)
+                            setCourseCode(resultSet.rows._array[0].courseCode);
+                            setFaculty(resultSet.rows._array[0].faculty);
+                            setBuilding(resultSet.rows._array[0].building);
+                            setRoom(resultSet.rows._array[0].room);
+                            setSelectedStartTime(resultSet.rows._array[0].selectedStartTime);
+                            setSelectedEndTime(resultSet.rows._array[0].selectedEndTime);
+                        },
+                        (txObj, error) => console.log(error)
+                    );
+                });
+                */
+
+                let EditItem= Object.values(courseItems).find((obj)=>{
+                    return obj.id === id
+                })
+                
+                setCourseId(EditItem.id)
+                setCourseCode(EditItem.courseCode);
+                setFaculty(EditItem.faculty);
+                setBuilding(EditItem.building);
+                setRoom(EditItem.room);
+                setSelectedStartTime(EditItem.selectedStartTime);
+                setSelectedEndTime(EditItem.selectedEndTime);
+
+                setEdit(true);
+
+                setVisible(true);
+
+            }
+            
 
           
         
@@ -207,7 +264,6 @@ const Routine = () => {
                     <ScrollView>
                         {
                             courseItems.map((courseItem,index) =>{
-                              
                             return  (
                                
                                 <View key={index} style={{width: wp(94), margin:wp(1), marginHorizontal:wp(3), padding: wp(4),paddingHorizontal:wp(6),flexDirection:'row',justifyContent:'space-between',backgroundColor:'#323232',borderRadius:wp(5)}}>
@@ -224,7 +280,7 @@ const Routine = () => {
                                         </View>
                                     </View>
                                     <View style={{marginHorizontal:wp(2),padding:wp(2),paddingHorizontal:wp(3),width:wp(30),flexDirection:'row',justifyContent:'space-between'}}>
-                                        <TouchableOpacity><FontAwesome name="edit" size={24} color="white" /></TouchableOpacity>
+                                        <TouchableOpacity onPress={()=>handleRoutineEdit(courseItem.id)}><FontAwesome name="edit" size={24} color="white" /></TouchableOpacity>
                                         <TouchableOpacity onPress={()=>handleRoutineDelete(courseItem.id)}><MaterialIcons style={{left:wp(-8)}} name="delete" size={24} color="white" /></TouchableOpacity>
                                     </View>
                                 </View>
@@ -248,35 +304,35 @@ const Routine = () => {
                         </View>
                     </TouchableOpacity>
                     <View style={{ backgroundColor:'#fff'}}>
-                        <Modal animationIn={'slideInUp'} animationOut={'slideOutDown'} isVisible={visible}  onBackdropPress={()=>{ setVisible(false)}} onBackButtonPress={()=>{ setVisible(false)}}>
+                        <Modal animationIn={'slideInUp'} animationOut={'slideOutDown'} isVisible={visible}  onBackdropPress={()=>{ setVisible(false),setEdit(false)}} onBackButtonPress={()=>{ setVisible(false),setEdit(false)}}>
                             <View style={{ flex: 1 ,padding:20, position:'absolute',bottom:-20,left:-20,backgroundColor:'#fff',width:wp(100),height:hp(50),borderTopLeftRadius:wp(6),borderTopRightRadius:wp(6)}}>
                                 <View style={{flexDirection:'row', justifyContent:'space-between',alignItems:'center'}}>
-                                    <Text style={{fontSize:wp(4),fontWeight:700,marginBottom:hp(1),padding:1}}>ADD NEW CLASS ON {selectedDate ? selectedDate : moment(date).format('DD-MM-YYYY')} 
+                                    <Text style={{fontSize:wp(4),fontWeight:700,marginBottom:hp(1),padding:1}}>{edit ? "Edit class on" : "Add Class on"} {selectedDate ? selectedDate : moment(date).format('DD-MM-YYYY')} 
                                     </Text>
                                     <TouchableOpacity onPress={handleRoutineAdd}>
-                                        <Text style={{ backgroundColor:"#141414",color:'white', padding:wp(1),marginBottom:hp(1), paddingHorizontal:wp(7),borderWidth: 1, borderRadius:wp(10)}}>ADD</Text>
+                                        <Text style={{ backgroundColor:"#141414",color:'white', padding:wp(1),marginBottom:hp(1), paddingHorizontal:wp(7),borderWidth: 1, borderRadius:wp(10)}}>Done</Text>
                                     </TouchableOpacity>
                                 </View>
                                 <View style={styles.flex_input}>
                                     <Text style={styles.label}>Course Code</Text>
-                                    <TextInput onChangeText={text=>setCourseCode(text)}  style={styles.input}  placeholder="e.g.Cse 121"/>
+                                    <TextInput onChangeText={text=>setCourseCode(text)} value={edit?courseCode:null}   style={styles.input}  placeholder="e.g.Cse 121"/>
                                 </View>
                                 <View style={styles.flex_input}>
                                     <Text style={styles.label}>Faculty</Text>
-                                    <TextInput onChangeText={text=>setFaculty(text)} style={styles.input}  placeholder="e.g. MDI"/>
+                                    <TextInput onChangeText={text=>setFaculty(text)} value={edit?faculty:null} style={styles.input}  placeholder="e.g. MDI"/>
                                 </View>
                                 <View style={styles.flex_input}>
                                     <Text style={styles.label}>Building</Text>
-                                    <TextInput keyboardType="number-pad"  onChangeText={text=>setBuilding(text)}  style={styles.input}  placeholder="e.g. 2"/>
+                                    <TextInput keyboardType="number-pad"  onChangeText={text=>setBuilding(text)} value={edit?building:null} style={styles.input}  placeholder="e.g. 2"/>
                                 </View>
                                 <View style={styles.flex_input}>
                                     <Text style={styles.label}>Room No.</Text>
-                                    <TextInput keyboardType="number-pad" onChangeText={text=>setRoom(text)}  style={styles.input}  placeholder="e.g. 901"/>
+                                    <TextInput keyboardType="number-pad" onChangeText={text=>setRoom(text)} value={edit?room:null}  style={styles.input}  placeholder="e.g. 901"/>
                                 </View>
                                 <View style={[styles.flex_input,{ marginTop:hp(1)}]}>
                                     <Text style={styles.label}>Start Time</Text>
                                     <TouchableOpacity  title="Show Time Picker" onCancel={hideTimeStartPicker} onPress={showTimeStartPicker}>
-                                        <Text style={{ paddingHorizontal:wp(11), padding:1,marginRight:wp(3), borderColor:'#141414',borderWidth: 1, borderRadius:wp(10)}}>{selectedStartTime ? selectedStartTime : "Time"}</Text>
+                                        <Text  style={{ paddingHorizontal:wp(11), padding:1,marginRight:wp(3), borderColor:'#141414',borderWidth: 1, borderRadius:wp(10)}}>{selectedStartTime ? selectedStartTime : "Time"}</Text>
                                     </TouchableOpacity> 
                                     <DateTimePickerModal
                                         isVisible={isTimeStartPickerVisible}

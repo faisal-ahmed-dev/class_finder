@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   StyleSheet,
   SafeAreaView,
@@ -8,23 +8,32 @@ import {
   Image,
   TouchableOpacity,
   Switch,
+  TextInput,
 } from 'react-native';
 import FeatherIcon from 'react-native-vector-icons/Feather';
 import {widthPercentageToDP as wp, heightPercentageToDP as hp} from 'react-native-responsive-screen';
+import Modal from "react-native-modal";
+import db from '../../api/src/model/db';
+
+import  { useState, useRef,useEffect } from 'react';
+
+
+
 const SECTIONS = [
 
-  {
-    header: 'Help',
-    items: [
-      { id: 'bug', icon: 'flag', label: 'Report Bug', type: 'link' },
-      { id: 'contact', icon: 'mail', label: 'Contact Us', type: 'link' },
-    ],
-  },
+  /*
   {
     header: 'Content',
     items: [
       { id: 'save', icon: 'save', label: 'Saved', type: 'link' },
       { id: 'download', icon: 'download', label: 'Downloads', type: 'link' },
+    ],
+  },
+  */
+  {
+    header: 'Help',
+    items: [
+      { id: 'contact', icon: 'mail', label: 'Contact Us', type: 'link' },
     ],
   },
 ];
@@ -34,6 +43,67 @@ const Profile = () => {
     darkMode: true,
     wifi: false,
   });
+
+
+  const [visible,setVisible]=useState(false);
+  const [name,setName]=useState(false);
+
+
+  useEffect(() => {
+            
+    db.transaction(tx => {
+      tx.executeSql(`CREATE TABLE IF NOT EXISTS class_user (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user TEXT,
+        Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+    );`),
+      (txObj, resultSet) => {console.log("success database", resultSet)},
+      (txObj, error) => console.log(error)
+    });
+
+        db.transaction(tx => {
+            tx.executeSql(`SELECT user FROM class_user`, null,
+                (txObj, resultSet) => {
+                  if (resultSet.rows.length > 0) {
+                    const firstRow = resultSet.rows.item(0);
+                    const { user } = firstRow;
+                    setName(user);
+                }else{
+                  db.transaction(tx => {
+                    tx.executeSql(`INSERT INTO class_user(user)
+                    VALUES ('JOHN DOE')
+                    `, null,
+                      (txObj, resultSet) => {console.log("success insert", resultSet)},
+                      (txObj, error) => console.log(error)
+                    );
+                  });
+                } 
+                
+                },
+                (txObj, error) => console.log(error)
+            );
+        });
+        
+        
+  }, [db]);
+
+
+  const handleProfileDone=()=>{
+    
+
+    db.transaction(tx => {
+      tx.executeSql(`update class_user set user='${name}'`, null,
+          (txObj, resultSet) => {},
+          (txObj, error) => console.log(error)
+      );
+  });
+
+  }
+
+
+
+  
+
 
   return (
     <SafeAreaView style={{ backgroundColor: '#f6f6f6' }}>
@@ -54,16 +124,18 @@ const Profile = () => {
             }}
             style={styles.profileAvatar} />
 
-          <Text style={styles.profileName}>John Doe</Text>
+          <Text style={styles.profileName}>{(name) ? name :"JOHN DOE"}</Text>
 
-          <Text style={styles.profileEmail}>john.doe@mail.com</Text>
+          {
+            //<Text style={styles.profileEmail}>john.doe@mail.com</Text>
+          }
 
           <TouchableOpacity
             onPress={() => {
-              // handle onPress
+              setVisible(true)
             }}>
-            <View style={styles.profileAction}>
-              <Text style={styles.profileActionText}>Edit Profile</Text>
+            <View style={styles.profileAction} >
+              <Text style={styles.profileActionText} >Edit Profile</Text>
 
               <FeatherIcon color="#fff" name="edit" size={16} />
             </View>
@@ -125,6 +197,24 @@ const Profile = () => {
           </View>
         ))}
       </ScrollView>
+
+
+
+      <View style={{ backgroundColor:'#fff'}}>
+                        <Modal animationIn={'slideInUp'} animationOut={'slideOutDown'} isVisible={visible}  onBackdropPress={()=>{ setVisible(false)}} onBackButtonPress={()=>{ setVisible(false)}}>
+                            <View style={{ flex: 1 ,padding:20, position:'absolute',bottom:-20,left:-20,backgroundColor:'#fff',width:wp(100),height:hp(50),borderTopLeftRadius:wp(6),borderTopRightRadius:wp(6)}}>
+                                <View style={{flexDirection:'row', justifyContent:'space-between',alignItems:'center'}}>
+                                    <TouchableOpacity onPress={handleProfileDone}>
+                                        <Text style={[styles.flex_input,{ backgroundColor:"#141414",color:'white', padding:wp(1),marginBottom:hp(1), paddingHorizontal:wp(7),borderWidth: 1, borderRadius:wp(10)}]}>Done</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                <View style={styles.flex_input}>
+                                    <Text style={styles.label}>Name</Text>
+                                    <TextInput onChangeText={text=>setName(text)}  style={styles.input}  placeholder="Enter Your Name"/>
+                                </View>
+                            </View>
+                        </Modal>
+                    </View>
     </SafeAreaView>
   );
 }
@@ -246,4 +336,7 @@ const styles = StyleSheet.create({
     color: '#616161',
     marginRight: 4,
   },
+  flex_input:{
+    flexDirection:"row",alignItems:"center",justifyContent:"space-between"
+},
 });
