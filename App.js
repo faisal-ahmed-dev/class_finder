@@ -14,48 +14,48 @@ const Tab=createBottomTabNavigator();
 const App = () => {
   return (
       <NavigationContainer>
-      <Tab.Navigator 
-        screenOptions={({ route }) => ({
-          tabBarIcon: ({ focused, color, size }) => {
-            if (route.name === 'Home') {
-              return (
-                <Ionicons
-                  name={
-                    focused
-                      ? 'home'
-                      : 'home-outline'
-                  }
-                  size={size}
-                  color={color}
-                />
-              );
-            } else if (route.name === 'Profile') {
-              return (
-                <FontAwesome
-                  name={focused ? 'user-circle' : 'user-circle-o'}
-                  size={size}
-                  color={color}
-                />
-              );
-            }
-            else if (route.name === 'Routine'){
-              return (
-                <FontAwesome name={focused ? "calendar":"calendar-o"} size={size} color={color} />
-              );
-            }
-          },
-          tabBarInactiveTintColor: 'gray',
-          tabBarActiveTintColor: 'black',
-          headerShown: false,
-          
-          
-          
-        })}
-      >
-        <Tab.Screen name="Home" component={Home} />
-        <Tab.Screen name="Routine" component={Routine} />
-        <Tab.Screen name="Profile" component={Profile} />
-      </Tab.Navigator>
+        <Tab.Navigator 
+          screenOptions={({ route }) => ({
+            tabBarIcon: ({ focused, color, size }) => {
+              if (route.name === 'Home') {
+                return (
+                  <Ionicons
+                    name={
+                      focused
+                        ? 'home'
+                        : 'home-outline'
+                    }
+                    size={size}
+                    color={color}
+                  />
+                );
+              } else if (route.name === 'Profile') {
+                return (
+                  <FontAwesome
+                    name={focused ? 'user-circle' : 'user-circle-o'}
+                    size={size}
+                    color={color}
+                  />
+                );
+              }
+              else if (route.name === 'Routine'){
+                return (
+                  <FontAwesome name={focused ? "calendar":"calendar-o"} size={size} color={color} />
+                );
+              }
+            },
+            tabBarInactiveTintColor: 'gray',
+            tabBarActiveTintColor: 'black',
+            headerShown: false,
+            
+            
+            
+          })}
+        >
+          <Tab.Screen name="Home" component={Home} />
+          <Tab.Screen name="Routine" component={Routine} />
+          <Tab.Screen name="Profile" component={Profile} />
+        </Tab.Navigator>
     </NavigationContainer>
     )
 }

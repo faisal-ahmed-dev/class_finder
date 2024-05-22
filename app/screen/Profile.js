@@ -204,8 +204,9 @@ const Profile = () => {
                         <Modal animationIn={'slideInUp'} animationOut={'slideOutDown'} isVisible={visible}  onBackdropPress={()=>{ setVisible(false)}} onBackButtonPress={()=>{ setVisible(false)}}>
                             <View style={{ flex: 1 ,padding:20, position:'absolute',bottom:-20,left:-20,backgroundColor:'#fff',width:wp(100),height:hp(50),borderTopLeftRadius:wp(6),borderTopRightRadius:wp(6)}}>
                                 <View style={{flexDirection:'row', justifyContent:'space-between',alignItems:'center'}}>
+                                    <Text></Text>
                                     <TouchableOpacity onPress={handleProfileDone}>
-                                        <Text style={[styles.flex_input,{ backgroundColor:"#141414",color:'white', padding:wp(1),marginBottom:hp(1), paddingHorizontal:wp(7),borderWidth: 1, borderRadius:wp(10)}]}>Done</Text>
+                                        <Text style={[styles.flex_input,{ backgroundColor:"#141414",color:'white', padding:wp(1),marginBottom:hp(3), paddingHorizontal:wp(7),borderWidth: 1, borderRadius:wp(10)}]}>Done</Text>
                                     </TouchableOpacity>
                                 </View>
                                 <View style={styles.flex_input}>
