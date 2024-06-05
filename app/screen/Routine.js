@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, SafeAreaView, TouchableWithoutFeedback, Dimensions, TouchableOpacity, TextInput, Button, ScrollView, FlatList, Platform } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, TouchableWithoutFeedback, Dimensions, TouchableOpacity, TextInput, Button, ScrollView, FlatList, Platform, Switch } from 'react-native';
 import React, { useState, useRef, useEffect } from 'react';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import moment from 'moment';
@@ -40,6 +40,7 @@ const Routine = () => {
   const [building, setBuilding] = useState(null);
   const [room, setRoom] = useState(null);
   const [note, setNote] = useState(null); // New note state
+  const [repeatEveryWeekday, setRepeatEveryWeekday] = useState(false);
   const [courseItems, setCourseItems] = useState([]);
   const [courseId, setCourseId] = useState(null);
 
@@ -57,7 +58,7 @@ const Routine = () => {
     let token;
     if (Constants.isDevice) {
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus.status;
+      let finalStatus = existingStatus;
       if (finalStatus !== 'granted') {
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
@@ -126,22 +127,27 @@ const Routine = () => {
   };
 
   useEffect(() => {
-    db.transaction(tx => {
-      tx.executeSql(
-        `SELECT * FROM class WHERE selectedDate='${selectedDate}' ORDER BY selectedStartTime ASC`,
-        [],
-        (txObj, resultSet) => setCourseItems(resultSet.rows._array),
-        (txObj, error) => console.log(error)
-      );
-    });
+    handleRoutineRefresh();
   }, [selectedDate]);
 
   const handleRoutineRefresh = () => {
+    const dayOfWeek = moment(selectedDate, 'DD-MM-YYYY').format('dddd');
+
     db.transaction(tx => {
       tx.executeSql(
-        `SELECT * FROM class WHERE selectedDate='${selectedDate}' ORDER BY selectedStartTime ASC`,
-        [],
-        (txObj, resultSet) => setCourseItems(resultSet.rows._array),
+        `SELECT * FROM class WHERE selectedDate='${selectedDate}' OR (repeatEveryWeekday=1 AND selectedDate<=?) ORDER BY selectedStartTime ASC`,
+        [selectedDate],
+        (txObj, resultSet) => {
+          const allItems = resultSet.rows._array;
+          const filteredItems = allItems.filter(item => {
+            if (item.repeatEveryWeekday) {
+              const itemDayOfWeek = moment(item.selectedDate, 'DD-MM-YYYY').format('dddd');
+              return itemDayOfWeek === dayOfWeek;
+            }
+            return true;
+          });
+          setCourseItems(filteredItems);
+        },
         (txObj, error) => console.log(error)
       );
     });
@@ -160,6 +166,7 @@ const Routine = () => {
           selectedEndTime TEXT,
           selectedDate TEXT,
           note TEXT,
+          repeatEveryWeekday INTEGER,
           Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
         );`,
         [],
@@ -167,25 +174,20 @@ const Routine = () => {
         (txObj, error) => console.log(error)
       );
 
-      tx.executeSql(
-        `SELECT * FROM class WHERE selectedDate='${selectedDate}' ORDER BY selectedStartTime ASC`,
-        [],
-        (txObj, resultSet) => setCourseItems(resultSet.rows._array),
-        (txObj, error) => console.log(error)
-      );
+      handleRoutineRefresh();
     });
-  }, [db]);
+  }, []);
 
   const handleRoutineAdd = () => {
     if (edit === false) {
       db.transaction(tx => {
         tx.executeSql(
-          `INSERT INTO class (courseCode, faculty, building, room, selectedStartTime, selectedEndTime, selectedDate, note)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [courseCode, faculty, building, room, selectedStartTime, selectedEndTime, selectedDate, note],
+          `INSERT INTO class (courseCode, faculty, building, room, selectedStartTime, selectedEndTime, selectedDate, note, repeatEveryWeekday)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [courseCode, faculty, building, room, selectedStartTime, selectedEndTime, selectedDate, note, repeatEveryWeekday ? 1 : 0],
           (txObj, resultSet) => {
             console.log("success insert", resultSet);
-            scheduleNotification(courseCode, selectedStartTime, selectedDate);
+            scheduleNotification(courseCode, selectedStartTime, selectedDate, repeatEveryWeekday);
           },
           (txObj, error) => console.log(error)
         );
@@ -193,11 +195,11 @@ const Routine = () => {
     } else {
       db.transaction(tx => {
         tx.executeSql(
-          `UPDATE class SET courseCode=?, faculty=?, building=?, room=?, selectedStartTime=?, selectedEndTime=?, note=? WHERE id=?`,
-          [courseCode, faculty, building, room, selectedStartTime, selectedEndTime, note, courseId],
+          `UPDATE class SET courseCode=?, faculty=?, building=?, room=?, selectedStartTime=?, selectedEndTime=?, note=?, repeatEveryWeekday=? WHERE id=?`,
+          [courseCode, faculty, building, room, selectedStartTime, selectedEndTime, note, repeatEveryWeekday ? 1 : 0, courseId],
           (txObj, resultSet) => {
             console.log("success update", resultSet);
-            scheduleNotification(courseCode, selectedStartTime, selectedDate);
+            scheduleNotification(courseCode, selectedStartTime, selectedDate, repeatEveryWeekday);
           },
           (txObj, error) => console.log(error)
         );
@@ -209,7 +211,7 @@ const Routine = () => {
     setVisible(false);
   };
 
-  const scheduleNotification = (courseCode, startTime, date) => {
+  const scheduleNotification = (courseCode, startTime, date, repeatEveryWeekday) => {
     const classStartTime = moment(`${date} ${startTime}`, 'DD-MM-YYYY hh:mm A').toDate();
     const twoMinutesBefore = moment(classStartTime).subtract(2, 'minutes').toDate();
 
@@ -219,9 +221,9 @@ const Routine = () => {
       Notifications.scheduleNotificationAsync({
         content: {
           title: "Upcoming Class",
-          body: `Your class ${courseCode}  at Building:${building} room:${room}! starts in 2 minutes`,
+          body: `Your class ${courseCode} starts in 2 minutes!`,
         },
-        trigger: twoMinutesBefore,
+        trigger: repeatEveryWeekday ? { hour: twoMinutesBefore.getHours(), minute: twoMinutesBefore.getMinutes(), repeats: true } : twoMinutesBefore,
       });
     } else {
       console.log("2 minutes before notification time is in the past. Notification not scheduled.");
@@ -231,9 +233,9 @@ const Routine = () => {
       Notifications.scheduleNotificationAsync({
         content: {
           title: "Class Reminder",
-          body: `Your class ${courseCode} is starting now at Building:${building} room:${room}`,
+          body: `Your class ${courseCode} is starting now at Building:${building} room:${room}!`,
         },
-        trigger: classStartTime,
+        trigger: repeatEveryWeekday ? { hour: classStartTime.getHours(), minute: classStartTime.getMinutes(), repeats: true } : classStartTime,
       });
     } else {
       console.log("Class start notification time is in the past. Notification not scheduled.");
@@ -264,6 +266,7 @@ const Routine = () => {
     setSelectedStartTime(EditItem.selectedStartTime);
     setSelectedEndTime(EditItem.selectedEndTime);
     setNote(EditItem.note); // Set the note for editing
+    setRepeatEveryWeekday(EditItem.repeatEveryWeekday === 1);
 
     setEdit(true);
     setVisible(true);
@@ -336,7 +339,7 @@ const Routine = () => {
           </TouchableOpacity>
           <View style={{ backgroundColor: '#fff' }}>
             <Modal animationIn={'slideInUp'} animationOut={'slideOutDown'} isVisible={visible} onBackdropPress={() => { setVisible(false); setEdit(false); }} onBackButtonPress={() => { setVisible(false); setEdit(false); }}>
-              <View style={{ flex: 1, padding: 20, position: 'absolute', bottom: -20, left: -20, backgroundColor: '#fff', width: wp(100), height: hp(50), borderTopLeftRadius: wp(6), borderTopRightRadius: wp(6) }}>
+              <View style={{ flex: 1, padding: 20, position: 'absolute', bottom: -20, left: -20, backgroundColor: '#fff', width: wp(100), height: hp(60), borderTopLeftRadius: wp(6), borderTopRightRadius: wp(6) }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={{ fontSize: wp(4), fontWeight: '700', marginBottom: hp(1), padding: 1 }}>{edit ? "Edit class on" : "Add Class on"} {selectedDate}</Text>
                   <TouchableOpacity onPress={handleRoutineAdd}>
@@ -362,6 +365,13 @@ const Routine = () => {
                 <View style={styles.flex_input}>
                   <Text style={styles.label}>Note</Text>
                   <TextInput onChangeText={text => setNote(text)} value={note} style={styles.input} placeholder="e.g. Bring slides" />
+                </View>
+                <View style={styles.flex_input}>
+                  <Text style={styles.label}>Repeat Every Weekday</Text>
+                  <Switch
+                    onValueChange={() => setRepeatEveryWeekday(previousState => !previousState)}
+                    value={repeatEveryWeekday}
+                  />
                 </View>
                 <View style={[styles.flex_input, { marginTop: hp(1) }]}>
                   <Text style={styles.label}>Start Time</Text>
