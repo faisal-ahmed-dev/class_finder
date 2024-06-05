@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, SafeAreaView, TouchableWithoutFeedback, Dimensions, TouchableOpacity, TextInput, Button, ScrollView, FlatList } from 'react-native'
+import { StyleSheet, Text, View, SafeAreaView, TouchableWithoutFeedback, Dimensions, TouchableOpacity, TextInput, Button, ScrollView, FlatList, Platform } from 'react-native';
 import React, { useState, useRef, useEffect } from 'react';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import moment from 'moment';
@@ -7,18 +7,28 @@ import DateTimePickerModal from "react-native-modal-datetime-picker";
 import Calendar from '../components/horizontal_date/Calender';
 import { AntDesign, FontAwesome, MaterialIcons } from '@expo/vector-icons';
 import db from '../../api/src/model/db';
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 
 const { width } = Dimensions.get('window');
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 const Routine = () => {
   const swiper = useRef();
   const [value, setValue] = useState(new Date());
   const [week, setWeek] = useState(false);
-  const [date, setDate] = useState(new Date())
+  const [date, setDate] = useState(new Date());
   const [visible, setVisible] = useState(false);
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false);
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
-  const [edit, setEdit] = useState(false)
+  const [edit, setEdit] = useState(false);
   const [buttonToggle, setButtonToggle] = useState('Light'); // Button toggle
   const [selectedDate, setSelectedDate] = useState(moment(date).format('DD-MM-YYYY'));
   const [isTimeStartPickerVisible, setTimeStartPickerVisibility] = useState(false);
@@ -32,6 +42,47 @@ const Routine = () => {
   const [note, setNote] = useState(null); // New note state
   const [courseItems, setCourseItems] = useState([]);
   const [courseId, setCourseId] = useState(null);
+
+  useEffect(() => {
+    registerForPushNotificationsAsync();
+
+    const subscription = Notifications.addNotificationReceivedListener(notification => {
+      console.log(notification);
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  const registerForPushNotificationsAsync = async () => {
+    let token;
+    if (Constants.isDevice) {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus.status;
+      if (finalStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') {
+        alert('Failed to get push token for push notification!');
+        return;
+      }
+      token = (await Notifications.getExpoPushTokenAsync()).data;
+      console.log(token);
+    } else {
+      alert('Must use physical device for Push Notifications');
+    }
+
+    if (Platform.OS === 'android') {
+      Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
+
+    return token;
+  };
 
   const showDatePicker = () => {
     setDatePickerVisibility(true);
@@ -132,7 +183,10 @@ const Routine = () => {
           `INSERT INTO class (courseCode, faculty, building, room, selectedStartTime, selectedEndTime, selectedDate, note)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [courseCode, faculty, building, room, selectedStartTime, selectedEndTime, selectedDate, note],
-          (txObj, resultSet) => { console.log("success insert", resultSet) },
+          (txObj, resultSet) => {
+            console.log("success insert", resultSet);
+            scheduleNotification(courseCode, selectedStartTime, selectedDate);
+          },
           (txObj, error) => console.log(error)
         );
       });
@@ -141,7 +195,10 @@ const Routine = () => {
         tx.executeSql(
           `UPDATE class SET courseCode=?, faculty=?, building=?, room=?, selectedStartTime=?, selectedEndTime=?, note=? WHERE id=?`,
           [courseCode, faculty, building, room, selectedStartTime, selectedEndTime, note, courseId],
-          (txObj, resultSet) => { console.log("success update", resultSet) },
+          (txObj, resultSet) => {
+            console.log("success update", resultSet);
+            scheduleNotification(courseCode, selectedStartTime, selectedDate);
+          },
           (txObj, error) => console.log(error)
         );
       });
@@ -150,6 +207,37 @@ const Routine = () => {
     }
     handleRoutineRefresh();
     setVisible(false);
+  };
+
+  const scheduleNotification = (courseCode, startTime, date) => {
+    const classStartTime = moment(`${date} ${startTime}`, 'DD-MM-YYYY hh:mm A').toDate();
+    const twoMinutesBefore = moment(classStartTime).subtract(2, 'minutes').toDate();
+
+    const now = new Date();
+
+    if (twoMinutesBefore > now) {
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Upcoming Class",
+          body: `Your class ${courseCode}  at Building:${building} room:${room}! starts in 2 minutes`,
+        },
+        trigger: twoMinutesBefore,
+      });
+    } else {
+      console.log("2 minutes before notification time is in the past. Notification not scheduled.");
+    }
+
+    if (classStartTime > now) {
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Class Reminder",
+          body: `Your class ${courseCode} is starting now at Building:${building} room:${room}`,
+        },
+        trigger: classStartTime,
+      });
+    } else {
+      console.log("Class start notification time is in the past. Notification not scheduled.");
+    }
   };
 
   const handleRoutineDelete = (id) => {
@@ -165,7 +253,7 @@ const Routine = () => {
 
   const handleRoutineEdit = (id) => {
     let EditItem = Object.values(courseItems).find((obj) => {
-      return obj.id === id
+      return obj.id === id;
     });
 
     setCourseId(EditItem.id);
@@ -231,7 +319,7 @@ const Routine = () => {
                     <TouchableOpacity onPress={() => handleRoutineDelete(courseItem.id)}><MaterialIcons style={{ left: wp(-8) }} name="delete" size={24} color="white" /></TouchableOpacity>
                   </View>
                 </View>
-              )
+              );
             })}
           </ScrollView>
         </View>
@@ -273,7 +361,7 @@ const Routine = () => {
                 </View>
                 <View style={styles.flex_input}>
                   <Text style={styles.label}>Note</Text>
-                  <TextInput onChangeText={text => setNote(text)} value={note} style={styles.input} placeholder="e.g. Bring slides" /> 
+                  <TextInput onChangeText={text => setNote(text)} value={note} style={styles.input} placeholder="e.g. Bring slides" />
                 </View>
                 <View style={[styles.flex_input, { marginTop: hp(1) }]}>
                   <Text style={styles.label}>Start Time</Text>
